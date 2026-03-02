@@ -132,6 +132,8 @@ Examples:
 
 The recommended architecture is local-first and cron-driven.
 
+Detailed scheduling semantics are defined in [Scheduling Strategy](./scheduling-strategy.md).
+
 Instead of building a long-running daemon for the first version, the product should:
 
 - store schedules in SQLite
