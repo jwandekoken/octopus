@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a local-first CLI application that manages projects and runs recurring AI-driven jobs against them.
+Build a local-first terminal application that manages projects and runs recurring AI-driven jobs against them.
 
 The product should support:
 
@@ -12,7 +12,11 @@ The product should support:
 - dispatching work to external AI agent CLIs such as `claude-code`, `codex-cli`, and `gemini-cli`
 - storing execution history, logs, and outputs
 
+The primary human interface should be a terminal UI (TUI) similar in spirit to tools like `lazygit` or `lazydocker`.
+
 The application itself should not try to be a general-purpose agent. It should orchestrate project data, schedules, prompts, and execution, while delegating the actual AI work to external tools through adapters.
+
+The product should still expose a small CLI surface for automation, scripting, and cron integration.
 
 ## Product Boundaries
 
@@ -144,7 +148,37 @@ Each scheduler tick should:
 
 This approach is simpler to operate, easier to debug, and more portable than building a background service too early.
 
-## CLI Design
+## Interface Design
+
+The product should have two interfaces over the same application services:
+
+- a TUI for interactive daily use
+- a CLI for automation, scripting, and scheduler entry points
+
+The TUI should be the primary interface for humans. The CLI should remain narrow and stable.
+
+### TUI Design
+
+The TUI should provide an operator-oriented layout with keyboard-driven workflows.
+
+Suggested layout:
+
+- left pane for navigation between projects, jobs, schedules, and runs
+- main pane for detail views and editable forms
+- lower pane for logs, run output, and status
+- modal overlays for create, edit, confirm, and filter flows
+
+Suggested actions:
+
+- create and edit projects
+- create and edit jobs
+- create and edit schedules
+- trigger ad hoc runs
+- inspect run history and logs
+- enable and disable jobs and schedules
+- validate adapter availability
+
+### CLI Design
 
 Suggested command surface:
 
@@ -167,7 +201,7 @@ octopus run show <run>
 octopus run logs <run>
 ```
 
-Example workflow:
+Example automation workflow:
 
 ```bash
 octopus project add --name website --type code --root ~/coding/website
@@ -180,23 +214,33 @@ octopus scheduler tick
 
 This is the key design abstraction.
 
-The system should define a common adapter interface for external AI CLIs:
+The system should define a common adapter interface for external AI CLIs.
 
-```ts
-interface AgentAdapter {
-  name: "claude-code" | "codex-cli" | "gemini-cli";
-  validate(): Promise<void>;
-  run(input: {
-    prompt: string;
-    workingDir: string;
-    timeoutSec?: number;
-    env?: Record<string, string>;
-  }): Promise<{
-    exitCode: number;
-    stdout: string;
-    stderr: string;
-    artifacts?: string[];
-  }>;
+In implementation terms, this should be a small Go interface owned by the core execution layer rather than by the TUI:
+
+```go
+type AgentAdapter interface {
+	Name() string
+	Validate(ctx context.Context) error
+	Run(ctx context.Context, input RunInput) (RunResult, error)
+}
+```
+
+Suggested supporting types:
+
+```go
+type RunInput struct {
+	Prompt     string
+	WorkingDir string
+	TimeoutSec int
+	Env        map[string]string
+}
+
+type RunResult struct {
+	ExitCode  int
+	Stdout    string
+	Stderr    string
+	Artifacts []string
 }
 ```
 
@@ -241,28 +285,32 @@ This makes the system flexible enough to support both coding and non-coding work
 
 Recommended stack for the first version:
 
-- `TypeScript`
-- `Node.js`
-- `commander` or `oclif` for the CLI
+- `Go`
+- `Bubble Tea` for the TUI application model
+- `Bubbles` for reusable TUI components
+- `Lip Gloss` for styling and layout
+- `Cobra` for the CLI entry points
 - `SQLite` for storage
-- `drizzle` or `better-sqlite3` for persistence
-- `cron-parser` for schedule evaluation
-- `zod` for input validation
+- `database/sql` with a SQLite driver for persistence
+- a cron parser library for schedule evaluation
 
 Why this stack:
 
-- fast iteration for CLI development
-- good support for subprocess execution
-- strong support for JSON-heavy workflows
+- strong fit for a `lazygit`-style TUI
+- Bubble Tea provides a mature event loop and update model
+- Bubbles gives reusable components for common terminal interactions
+- Go compiles to a single portable binary
+- good support for subprocess execution and streaming output
 - simple SQLite integration
-- easy prompt and metadata handling
+- straightforward concurrency model for scheduler and run execution
 
-An alternative would be `Go`, which is also a strong fit for a standalone CLI. For an MVP, TypeScript is likely faster to evolve.
+`Rust` with `ratatui` remains a viable alternative, but `Go` with `Bubble Tea` is the preferred choice for this project because it offers a more complete TUI component ecosystem and a faster path to an interactive operator interface.
 
 ## MVP Scope
 
 Version 1 should include:
 
+- a keyboard-driven TUI for project, job, schedule, and run management
 - project registration
 - job creation
 - manual job execution
@@ -280,7 +328,7 @@ Version 1 should exclude:
 
 ## Risks and Design Constraints
 
-The biggest complexity is not the CLI surface. It is the execution behavior of the external agent tools.
+The biggest complexity is not the TUI surface. It is the execution behavior of the external agent tools.
 
 Important constraints to define early:
 
@@ -303,7 +351,13 @@ Potential risks:
 
 ```txt
 octopus/
-  src/
+  cmd/
+    octopus/
+  internal/
+    tui/
+      app/
+      views/
+      components/
     cli/
     core/
       projects/
@@ -326,12 +380,13 @@ octopus/
 
 Build the first usable slice in this order:
 
-1. implement `project add` and `project list`
-2. implement `job create` and `job run`
-3. add one adapter, preferably `codex-cli`
-4. add SQLite persistence
-5. implement `scheduler tick`
-6. implement run history and log inspection
+1. implement shared core models and SQLite persistence
+2. add one adapter, preferably `codex-cli`
+3. implement `scheduler tick`
+4. build a TUI view for project list and project creation
+5. add job creation and ad hoc job execution flows
+6. implement run history and log inspection in the TUI
+7. keep a minimal CLI for automation and scheduler entry points
 
 This creates an end-to-end loop before adding more tools or more complex orchestration.
 
@@ -343,4 +398,4 @@ After the MVP is stable, likely next steps are:
 - add richer prompt templating and reusable job templates
 - support chained jobs or simple workflows
 - add notifications or reports after scheduled runs
-- add a lightweight UI if operational visibility becomes necessary
+- add richer dashboards and workflow views in the TUI
