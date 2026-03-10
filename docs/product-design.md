@@ -128,6 +128,29 @@ Examples:
 - approval mode
 - sandbox mode
 
+### Workflow
+
+Represents an ordered set of jobs that should be executed as a single flow.
+
+A workflow allows task piping by passing context and outputs from one step to the next.
+
+Suggested fields:
+
+- `id`
+- `project_id`
+- `name`
+- `description`
+- `steps` (ordered references to jobs)
+- `on_failure` (stop, continue, or retry policy)
+- `enabled`
+
+Initial constraints for future implementation:
+
+- linear sequence only (no DAG/branching)
+- sequential execution only
+- optional shared context map across steps
+- parent workflow run with child job runs for traceability
+
 ## Execution Model
 
 The recommended architecture is local-first and cron-driven.
@@ -325,7 +348,7 @@ Version 1 should exclude:
 - distributed execution
 - web interfaces
 - team accounts
-- advanced workflow orchestration
+- advanced workflow orchestration (workflows are post-MVP)
 - remote hosting
 
 ## Risks and Design Constraints
@@ -398,6 +421,6 @@ After the MVP is stable, likely next steps are:
 
 - support multiple agent adapters with profile-based configuration
 - add richer prompt templating and reusable job templates
-- support chained jobs or simple workflows
+- support chained jobs or simple workflows (`Workflow`)
 - add notifications or reports after scheduled runs
 - add richer dashboards and workflow views in the TUI
