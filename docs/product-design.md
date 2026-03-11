@@ -4,6 +4,18 @@
 
 Build a local-first terminal application that manages projects and runs recurring AI-driven jobs against them.
 
+## Engineering Method
+
+Implementation should follow the software-building philosophy defined in [Software Building Philosophy](./software-building-philosophy.md).
+
+In practice for this project, that means:
+
+- build top-down from user-visible flows
+- deliver thin vertical slices before broad abstractions
+- introduce interfaces mostly at IO boundaries
+- use stubs to validate seams early, then recurse downward
+- backtrack quickly when a layer API proves unworkable
+
 The product should support:
 
 - registering projects
