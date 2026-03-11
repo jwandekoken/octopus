@@ -7,6 +7,7 @@ Build a local-first terminal application that manages projects and runs recurrin
 ## Engineering Method
 
 Implementation should follow the software-building philosophy defined in [Software Building Philosophy](./software-building-philosophy.md).
+System structure and package boundaries should follow [Project Architecture](./project-architecture.md).
 
 In practice for this project, that means:
 

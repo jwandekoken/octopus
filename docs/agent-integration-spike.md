@@ -60,3 +60,5 @@ If both adapters validate and run successfully, we confirm:
 - persist projects/jobs/runs in SQLite
 - wire `scheduler tick` to call this adapter layer
 - add TUI views once execution reliability is acceptable
+
+Detailed graduation plan: [Spike Graduation Plan](./spike-graduation-plan.md).
