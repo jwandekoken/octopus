@@ -16,6 +16,11 @@ import (
 	"github.com/jc/octopus/internal/core/runs"
 )
 
+// Service is the core orchestrator for agent executions. It coordinates
+// looking up jobs, creating and updating run records, delegating the actual
+// work to the appropriate agent adapter (codex-cli or claude-code), and
+// enforcing safety constraints such as working-directory allow-lists and
+// timeouts.
 type Service struct {
 	adapters       map[string]agent.Adapter
 	jobs           *jobs.Service
@@ -25,8 +30,14 @@ type Service struct {
 	now            func() time.Time
 }
 
+// Option is a functional option for configuring a Service.
+// See WithAdapters, WithDefaultTimeout, WithAllowedWorkdirRoots, and
+// WithClock for available options.
 type Option func(*Service) error
 
+// WithAdapters overrides the default set of agent adapters. This is useful
+// in tests or when the caller wants to restrict which tools are available.
+// Returns an error if the provided map is empty.
 func WithAdapters(adapters map[string]agent.Adapter) Option {
 	return func(s *Service) error {
 		if len(adapters) == 0 {
@@ -37,6 +48,8 @@ func WithAdapters(adapters map[string]agent.Adapter) Option {
 	}
 }
 
+// WithDefaultTimeout overrides the default execution timeout (2 minutes).
+// This timeout is used when a job or ad-hoc run does not specify its own.
 func WithDefaultTimeout(timeout time.Duration) Option {
 	return func(s *Service) error {
 		if timeout <= 0 {
@@ -47,6 +60,10 @@ func WithDefaultTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithAllowedWorkdirRoots overrides the directories from which agent
+// executions are permitted to run. Each root is resolved to an absolute,
+// cleaned path. Any job whose working directory falls outside these roots
+// will be rejected by validateWorkingDir.
 func WithAllowedWorkdirRoots(roots []string) Option {
 	return func(s *Service) error {
 		resolved := make([]string, 0, len(roots))
@@ -65,6 +82,9 @@ func WithAllowedWorkdirRoots(roots []string) Option {
 	}
 }
 
+// WithClock overrides the time source used for recording run timestamps
+// (created_at, started_at, finished_at). Primarily useful in tests to
+// control time deterministically.
 func WithClock(now func() time.Time) Option {
 	return func(s *Service) error {
 		if now == nil {
@@ -75,6 +95,15 @@ func WithClock(now func() time.Time) Option {
 	}
 }
 
+// NewService constructs an execution Service with sensible defaults:
+//   - adapters: codex-cli and claude-code
+//   - defaultTimeout: 2 minutes
+//   - allowedRoots: the current working directory
+//   - clock: time.Now
+//
+// The jobRepo and runRepo may be nil when the service is only used for
+// validation (e.g. "octopus agent validate"). Functional options can
+// override any of the default values.
 func NewService(jobRepo jobs.Repository, runRepo runs.Repository, options ...Option) (*Service, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -104,6 +133,10 @@ func NewService(jobRepo jobs.Repository, runRepo runs.Repository, options ...Opt
 	return svc, nil
 }
 
+// Validate checks whether the required agent CLI tools are installed and
+// reachable. If tool is empty, all registered adapters are validated;
+// otherwise only the specified one is checked. Used by the
+// "octopus agent validate" CLI command.
 func (s *Service) Validate(ctx context.Context, tool string) error {
 	if strings.TrimSpace(tool) == "" {
 		for name, adapter := range s.adapters {
@@ -124,6 +157,10 @@ func (s *Service) Validate(ctx context.Context, tool string) error {
 	return nil
 }
 
+// Run executes an ad-hoc (non-persisted) agent invocation. It validates
+// inputs, resolves the adapter for the given tool, enforces the working
+// directory allow-list, falls back to the default timeout when none is
+// provided, and delegates the actual execution to the adapter.
 func (s *Service) Run(ctx context.Context, tool, prompt, workingDir string, timeout time.Duration) (agent.RunResult, error) {
 	adapter, ok := s.adapters[tool]
 	if !ok {
@@ -146,6 +183,15 @@ func (s *Service) Run(ctx context.Context, tool, prompt, workingDir string, time
 	})
 }
 
+// RunJob is the main entry point for executing a persisted job end-to-end.
+// It performs the full lifecycle:
+//  1. Resolves the job by ID or name via the jobs service.
+//  2. Creates a new Run record in "queued" status.
+//  3. Transitions the Run to "running" and records the start time.
+//  4. Delegates to executeJob for the actual agent invocation.
+//  5. Captures stdout, stderr, exit code, duration, and any error.
+//  6. Finalises the Run with the appropriate terminal status
+//     (succeeded, failed, or timed_out) and persists it.
 func (s *Service) RunJob(ctx context.Context, idOrName string) (runs.Run, error) {
 	if s.jobs == nil {
 		return runs.Run{}, errors.New("job repository is not configured")
@@ -207,6 +253,11 @@ func (s *Service) RunJob(ctx context.Context, idOrName string) (runs.Run, error)
 	return run, nil
 }
 
+// executeJob is the private helper that performs the actual agent invocation
+// for a given job. It resolves the adapter, validates the working directory,
+// applies the timeout, and calls the adapter's Run method. It also treats
+// a non-zero exit code as an error, so callers can distinguish between
+// execution failures and successful-but-non-zero exits.
 func (s *Service) executeJob(ctx context.Context, job jobs.Job) (agent.RunResult, error) {
 	adapter, ok := s.adapters[job.Tool]
 	if !ok {
@@ -234,6 +285,10 @@ func (s *Service) executeJob(ctx context.Context, job jobs.Job) (agent.RunResult
 	return result, nil
 }
 
+// validateWorkingDir is a security guard that ensures the provided
+// workingDir falls within one of the configured allowedRoots. An empty
+// workingDir is always allowed (the adapter will use its own default).
+// This prevents jobs from running in arbitrary filesystem locations.
 func (s *Service) validateWorkingDir(workingDir string) error {
 	if strings.TrimSpace(workingDir) == "" {
 		return nil
