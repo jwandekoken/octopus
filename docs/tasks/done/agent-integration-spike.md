@@ -18,33 +18,24 @@ Not implemented yet:
 - TUI
 - prompt templates
 
-## Commands
+## Current product commands
 
 Validate local setup:
 
 ```bash
-go run ./cmd/octopus spike validate
+go run ./cmd/octopus agent validate
 ```
 
-Run codex non-interactively:
+Run a configured job:
 
 ```bash
-go run ./cmd/octopus spike run --tool codex-cli --prompt "Say hello in one line"
+go run ./cmd/octopus job run <job-id|name>
 ```
 
-Run claude non-interactively:
+Execute due schedules:
 
 ```bash
-go run ./cmd/octopus spike run --tool claude-code --prompt "Say hello in one line"
-```
-
-Set repository scope for tools:
-
-```bash
-go run ./cmd/octopus spike run \
-  --tool codex-cli \
-  --workdir /path/to/repo \
-  --prompt "List changed files and summarize risk"
+go run ./cmd/octopus scheduler tick
 ```
 
 ## What this proves
@@ -61,4 +52,4 @@ If both adapters validate and run successfully, we confirm:
 - wire `scheduler tick` to call this adapter layer
 - add TUI views once execution reliability is acceptable
 
-Detailed graduation plan: [Spike Graduation Plan](./spike-graduation-plan.md).
+Detailed graduation plan: [Spike Graduation Plan](../in-progress/spike-graduation-plan.md).

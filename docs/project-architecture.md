@@ -5,9 +5,9 @@ This document defines the target architecture for Octopus.
 It complements:
 
 - [Product Design](./product-design.md)
-- [Agent Integration Spike](./agent-integration-spike.md)
+- [Agent Integration Spike](./tasks/done/agent-integration-spike.md)
 - [Software Building Philosophy](./software-building-philosophy.md)
-- [Spike Graduation Plan](./spike-graduation-plan.md)
+- [Spike Graduation Plan](./tasks/in-progress/spike-graduation-plan.md)
 
 ## Architecture goals
 

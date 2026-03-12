@@ -51,17 +51,17 @@ Related docs:
 
 - [x] Add unit tests for execution state transitions and failure handling.
 - [x] Add integration tests for SQLite run persistence.
-- [ ] Add integration tests for adapter invocation contract.
-- [ ] Add CLI tests for `job run` and `scheduler tick` happy/failure paths.
+- [x] Add integration tests for adapter invocation contract.
+- [x] Add CLI tests for `job run` and `scheduler tick` happy/failure paths.
 
 ### Phase 7: Decommission spike namespace
 
-- [ ] Remove `octopus spike ...` commands after product commands are stable.
-- [ ] Update docs/examples to use product commands only.
+- [x] Remove `octopus spike ...` commands after product commands are stable.
+- [x] Update docs/examples to use product commands only.
 
 ## Definition of done
 
-- [ ] Spike behavior is reachable through product commands (`job run`, `agent validate`, `scheduler tick`).
-- [ ] Run lifecycle is persisted and queryable.
-- [ ] Tests cover core success/failure paths.
+- [x] Spike behavior is reachable through product commands (`job run`, `agent validate`, `scheduler tick`).
+- [x] Run lifecycle is persisted and queryable.
+- [x] Tests cover core success/failure paths.
 - [x] No production flow depends on `internal/spike/*`.
