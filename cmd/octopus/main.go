@@ -5,11 +5,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/jc/octopus/internal/spike"
+	"github.com/jc/octopus/internal/core/execution"
+	"github.com/jc/octopus/internal/scheduler"
+	"github.com/jc/octopus/internal/storage/sqlite"
 )
+
+const defaultDBPath = ".octopus/octopus.db"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -17,74 +22,154 @@ func main() {
 		os.Exit(2)
 	}
 
-	svc := spike.NewService()
 	ctx := context.Background()
 
 	switch os.Args[1] {
-	case "spike":
-		handleSpike(ctx, svc, os.Args[2:])
+	case "agent":
+		handleAgent(ctx, os.Args[2:])
+	case "job":
+		handleJob(ctx, os.Args[2:])
+	case "scheduler":
+		handleScheduler(ctx, os.Args[2:])
 	default:
 		printUsage()
 		os.Exit(2)
 	}
 }
 
-func handleSpike(ctx context.Context, svc *spike.Service, args []string) {
-	if len(args) < 1 {
-		printSpikeUsage()
+func handleAgent(ctx context.Context, args []string) {
+	if len(args) < 1 || args[0] != "validate" {
+		printAgentUsage()
 		os.Exit(2)
 	}
 
-	switch args[0] {
-	case "validate":
-		if err := svc.Validate(ctx); err != nil {
-			fmt.Fprintf(os.Stderr, "validation error: %v\n", err)
-			os.Exit(1)
-		}
+	validateFS := flag.NewFlagSet("agent validate", flag.ExitOnError)
+	tool := validateFS.String("tool", "", "specific tool to validate")
+	_ = validateFS.Parse(args[1:])
+
+	svc, err := execution.NewService(nil, nil)
+	if err != nil {
+		fatalf("initialize execution service: %v", err)
+	}
+
+	if err := svc.Validate(ctx, strings.TrimSpace(*tool)); err != nil {
+		fatalf("validation error: %v", err)
+	}
+
+	if strings.TrimSpace(*tool) == "" {
 		fmt.Println("ok: codex-cli and claude-code are available")
-	case "run":
-		runFS := flag.NewFlagSet("spike run", flag.ExitOnError)
-		tool := runFS.String("tool", "", "agent tool: codex-cli|claude-code")
-		prompt := runFS.String("prompt", "", "prompt text")
-		workingDir := runFS.String("workdir", "", "working directory")
-		timeout := runFS.Duration("timeout", 2*time.Minute, "execution timeout, e.g. 30s, 2m")
+		return
+	}
+	fmt.Printf("ok: %s is available\n", *tool)
+}
 
-		_ = runFS.Parse(args[1:])
-
-		if *tool == "" || *prompt == "" {
-			fmt.Fprintln(os.Stderr, "--tool and --prompt are required")
-			runFS.Usage()
-			os.Exit(2)
-		}
-
-		result, err := svc.Run(ctx, *tool, *prompt, *workingDir, *timeout)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "run error: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("exit_code: %d\n", result.ExitCode)
-		fmt.Printf("duration: %s\n", result.Duration.Round(time.Millisecond))
-		fmt.Println("--- stdout ---")
-		fmt.Print(strings.TrimSpace(result.Stdout) + "\n")
-		fmt.Println("--- stderr ---")
-		fmt.Print(strings.TrimSpace(result.Stderr) + "\n")
-	default:
-		printSpikeUsage()
+func handleJob(ctx context.Context, args []string) {
+	if len(args) < 2 || args[0] != "run" {
+		printJobUsage()
 		os.Exit(2)
 	}
+
+	store := mustOpenStore()
+	defer func() {
+		_ = store.Close()
+	}()
+
+	svc, err := execution.NewService(store.Jobs(), store.Runs())
+	if err != nil {
+		fatalf("initialize execution service: %v", err)
+	}
+
+	run, err := svc.RunJob(ctx, args[1])
+	if err != nil {
+		fatalf("run error: %v", err)
+	}
+
+	exitCode := 0
+	if run.ExitCode != nil {
+		exitCode = *run.ExitCode
+	}
+
+	fmt.Printf("run_id: %s\n", run.ID)
+	fmt.Printf("status: %s\n", run.Status)
+	fmt.Printf("exit_code: %d\n", exitCode)
+	fmt.Printf("duration: %s\n", run.Duration.Round(time.Millisecond))
+	fmt.Println("--- stdout ---")
+	fmt.Print(strings.TrimSpace(run.Stdout) + "\n")
+	fmt.Println("--- stderr ---")
+	fmt.Print(strings.TrimSpace(run.Stderr) + "\n")
+}
+
+func handleScheduler(ctx context.Context, args []string) {
+	if len(args) < 1 || args[0] != "tick" {
+		printSchedulerUsage()
+		os.Exit(2)
+	}
+
+	tickFS := flag.NewFlagSet("scheduler tick", flag.ExitOnError)
+	limit := tickFS.Int("limit", 100, "max schedules handled per tick")
+	concurrency := tickFS.Int("concurrency", 2, "max concurrent runs per tick")
+	retries := tickFS.Int("retries", 1, "retry attempts per failed run")
+	_ = tickFS.Parse(args[1:])
+
+	store := mustOpenStore()
+	defer func() {
+		_ = store.Close()
+	}()
+
+	execSvc, err := execution.NewService(store.Jobs(), store.Runs())
+	if err != nil {
+		fatalf("initialize execution service: %v", err)
+	}
+
+	schedulerSvc := scheduler.NewService(store.Schedules(), execSvc, *concurrency, *retries)
+	result, err := schedulerSvc.Tick(ctx, *limit)
+	if err != nil {
+		fatalf("scheduler tick error: %v", err)
+	}
+
+	fmt.Printf("due: %d\n", result.Due)
+	fmt.Printf("executed: %d\n", result.Executed)
+	fmt.Printf("failed: %d\n", result.Failed)
+}
+
+func mustOpenStore() *sqlite.Store {
+	dbPath := strings.TrimSpace(os.Getenv("OCTOPUS_DB_PATH"))
+	if dbPath == "" {
+		dbPath = defaultDBPath
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		fatalf("create db directory: %v", err)
+	}
+
+	store, err := sqlite.Open(dbPath)
+	if err != nil {
+		fatalf("open store: %v", err)
+	}
+	return store
+}
+
+func fatalf(msg string, args ...any) {
+	fmt.Fprintf(os.Stderr, msg+"\n", args...)
+	os.Exit(1)
 }
 
 func printUsage() {
 	fmt.Println("octopus <command>")
 	fmt.Println("commands:")
-	fmt.Println("  spike validate")
-	fmt.Println("  spike run --tool codex-cli|claude-code --prompt \"...\" [--workdir PATH] [--timeout 2m]")
+	fmt.Println("  agent validate [--tool codex-cli|claude-code]")
+	fmt.Println("  job run <job-id|name>")
+	fmt.Println("  scheduler tick [--limit 100] [--concurrency 2] [--retries 1]")
 }
 
-func printSpikeUsage() {
-	fmt.Println("octopus spike <command>")
-	fmt.Println("commands:")
-	fmt.Println("  validate")
-	fmt.Println("  run")
+func printAgentUsage() {
+	fmt.Println("octopus agent validate [--tool codex-cli|claude-code]")
+}
+
+func printJobUsage() {
+	fmt.Println("octopus job run <job-id|name>")
+}
+
+func printSchedulerUsage() {
+	fmt.Println("octopus scheduler tick [--limit 100] [--concurrency 2] [--retries 1]")
 }

@@ -18,39 +18,39 @@ Related docs:
 
 ### Phase 1: Turn spike service into product execution service
 
-- [ ] Move `internal/spike/service.go` to `internal/core/execution/service.go`.
-- [ ] Rename `spike.Service` to `execution.Service`.
-- [ ] Keep behavior parity for existing adapter execution while refactoring.
+- [x] Move `internal/spike/service.go` to `internal/core/execution/service.go`.
+- [x] Rename `spike.Service` to `execution.Service`.
+- [x] Keep behavior parity for existing adapter execution while refactoring.
 
 ### Phase 2: Add minimal persistence seam
 
-- [ ] Define repository interfaces in `internal/core/runs` and `internal/core/jobs` required by execution.
-- [ ] Add SQLite-backed `runs` repository with create/update methods.
-- [ ] Persist run lifecycle states: `queued`, `running`, `succeeded`, `failed`, `timed_out`.
-- [ ] Persist run metadata: exit code, duration, stdout/stderr (or references).
+- [x] Define repository interfaces in `internal/core/runs` and `internal/core/jobs` required by execution.
+- [x] Add SQLite-backed `runs` repository with create/update methods.
+- [x] Persist run lifecycle states: `queued`, `running`, `succeeded`, `failed`, `timed_out`.
+- [x] Persist run metadata: exit code, duration, stdout/stderr (or references).
 
 ### Phase 3: Product CLI commands (replace spike surface)
 
-- [ ] Implement `octopus job run <job-id|name>` using `execution.Service`.
-- [ ] Implement `octopus agent validate` for all/specific adapters.
-- [ ] Keep temporary alias compatibility for `octopus spike run` and `octopus spike validate`.
+- [x] Implement `octopus job run <job-id|name>` using `execution.Service`.
+- [x] Implement `octopus agent validate` for all/specific adapters.
+- [x] Keep temporary alias compatibility for `octopus spike run` and `octopus spike validate`.
 
 ### Phase 4: Scheduler integration
 
-- [ ] Wire `octopus scheduler tick` to invoke `execution.Service` for due jobs.
-- [ ] Ensure scheduler depends on execution interface, not adapter internals.
+- [x] Wire `octopus scheduler tick` to invoke `execution.Service` for due jobs.
+- [x] Ensure scheduler depends on execution interface, not adapter internals.
 
 ### Phase 5: Production guardrails
 
-- [ ] Add concurrency limit for runs per scheduler tick.
-- [ ] Add timeout policy from job configuration with defaults.
-- [ ] Add retry policy at scheduler layer.
-- [ ] Validate and enforce working directory boundaries before execution.
+- [x] Add concurrency limit for runs per scheduler tick.
+- [x] Add timeout policy from job configuration with defaults.
+- [x] Add retry policy at scheduler layer.
+- [x] Validate and enforce working directory boundaries before execution.
 
 ### Phase 6: Tests and hardening
 
-- [ ] Add unit tests for execution state transitions and failure handling.
-- [ ] Add integration tests for SQLite run persistence.
+- [x] Add unit tests for execution state transitions and failure handling.
+- [x] Add integration tests for SQLite run persistence.
 - [ ] Add integration tests for adapter invocation contract.
 - [ ] Add CLI tests for `job run` and `scheduler tick` happy/failure paths.
 
@@ -64,4 +64,4 @@ Related docs:
 - [ ] Spike behavior is reachable through product commands (`job run`, `agent validate`, `scheduler tick`).
 - [ ] Run lifecycle is persisted and queryable.
 - [ ] Tests cover core success/failure paths.
-- [ ] No production flow depends on `internal/spike/*`.
+- [x] No production flow depends on `internal/spike/*`.
