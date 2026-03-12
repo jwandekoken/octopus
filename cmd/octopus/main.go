@@ -16,6 +16,17 @@ import (
 
 const defaultDBPath = ".octopus/octopus.db"
 
+// CLI usage quick reference:
+//   octopus agent validate [--tool codex-cli|claude-code]
+//     --tool: optional, validates only one tool when set.
+//   octopus job run <job-id|name>
+//     <job-id|name>: required, runs a specific job by ID or name.
+//   octopus scheduler tick [--limit 100] [--concurrency 2] [--retries 1]
+//     --limit: max schedules handled per tick (default 100).
+//     --concurrency: max concurrent runs per tick (default 2).
+//     --retries: retry attempts per failed run (default 1).
+// Environment:
+//   OCTOPUS_DB_PATH: optional SQLite path (default .octopus/octopus.db).
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
